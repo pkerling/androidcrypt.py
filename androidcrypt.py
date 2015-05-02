@@ -30,6 +30,7 @@ from io import BytesIO
 import cryptfooter
 import aes
 from pbkdf2 import pbkdf2_bin
+import pyscrypt
 
 # constants from vold/cryptfs.h
 HASH_COUNT = 2000
@@ -84,10 +85,11 @@ def check_recovery():
 
     device = devices[0]
     devid, _, state = device.partition('\t')
-    if state != 'recovery':
-        print_error(("Device '{}' is in '{}' state, please reboot into "
+    # Check did not work even in recovery for me
+    #if state != 'recovery':
+        #print_error(("Device '{}' is in '{}' state, please reboot into "
                      "recovery.").format(devid, state))
-        return
+        #return
 
     print_info('found {}'.format(devid))
     return True
@@ -334,6 +336,8 @@ def setup_mapping(fstab_entry):
         FOOTER = load_footer_from_efs()
         if not FOOTER: return
 
+    print FOOTER
+
     if not MASTER_KEY:
         MASTER_KEY = decrypt_master_key(FOOTER.encrypted_master_key,
                                                FOOTER.salt)
@@ -369,8 +373,10 @@ def dmsetup_create(source_device, target_name, crypto_algorithm, master_key):
 
 
 def get_key_and_iv(passphrase, salt):
-    keyiv = pbkdf2_bin(passphrase, salt,
-                       iterations = HASH_COUNT, keylen = 32)
+    global FOOTER
+    keyiv = pyscrypt.hash(password = passphrase, salt = salt, N = FOOTER.scrypt_N, r = FOOTER.scrypt_r, p = FOOTER.scrypt_p, dkLen = 32)
+#    keyiv = pbkdf2_bin(passphrase, salt,
+ #                      iterations = HASH_COUNT, keylen = 32)
     key = keyiv[0:KEY_LEN_BYTES]
     iv = keyiv[KEY_LEN_BYTES:IV_LEN_BYTES+KEY_LEN_BYTES]
     return key, iv
@@ -391,7 +397,7 @@ def aes128_cbc_decrypt(data, key, iv):
 
 def load_footer_from_efs():
     print_progress('Loading footer file from /efs... ')
-    footer_files = adb_shell("find /efs -name '*_footer'").splitlines()
+    footer_files = adb_shell("find /efs -name 'metadata'").splitlines()
     if len(footer_files) == 0:
         print_error('No footers found.')
         return

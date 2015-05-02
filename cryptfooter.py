@@ -46,6 +46,9 @@ class CryptFooter():
         self.crypt_type_name = self.read_crypt_type_name(f)
         self.encrypted_master_key = self.read_encrypted_master_key(f)
         self.salt = self.read_salt(f)
+        self.scrypt_N = self.read_scrypt_N(f)
+        self.scrypt_r = self.read_scrypt_r(f)
+        self.scrypt_p = self.read_scrypt_p(f)
 
     def read_magic(self, f):
         magic = self.read_le32(f)
@@ -73,14 +76,23 @@ class CryptFooter():
     def read_crypt_type_name(self, f):      return f.read(64).rstrip('\0')
 
     def read_encrypted_master_key(self, f):
-        if self.ftr_size > self.EXPECTED_FOOTER_SIZE :
+        #if self.ftr_size > self.EXPECTED_FOOTER_SIZE :
             # skip to the end of the footer if it's bigger than expected
-            f.seek(self.ftr_size - self.EXPECTED_FOOTER_SIZE, os.SEEK_CUR)
+            #f.seek(self.ftr_size - self.EXPECTED_FOOTER_SIZE, os.SEEK_CUR)
+        # skip spare2
+        f.seek(4, os.SEEK_CUR)
         return f.read(self.keysize)
 
     def read_salt(self, f):
         f.seek(self.KEY_TO_SALT_PADDING, os.SEEK_CUR)
         return f.read(self.SALT_LEN)
+
+    def read_scrypt_N(self, f):
+        # Skip persist data stuff and KDF
+        f.seek(8 + 8 + 4 + 1, os.SEEK_CUR)
+        return 2 ** ord(f.read(1))
+    def read_scrypt_r(self, f): return 2 ** ord(f.read(1))
+    def read_scrypt_p(self, f): return 2 ** ord(f.read(1))
 
     # Utility functions
     def read_le16(self, f):
@@ -97,10 +109,10 @@ class CryptFooter():
                "minor_version=%d, ftr_size=%d, flags=0x%X, keysize=%d, " + \
                "spare1=0x%X, fs_size=%d, failed_decrypt_count=%d, " + \
                "crypt_type_name=\"%s\", encrypted_master_key=0x%s, " + \
-               "salt=0x%s }") \
+               "salt=0x%s, N=%d, r=%d, p=%d }") \
                % (self.magic, self.major_version, self.minor_version,
                   self.ftr_size, self.flags, self.keysize, self.spare1,
                   self.fs_size, self.failed_decrypt_count,
                   self.crypt_type_name,
                   binascii.hexlify(self.encrypted_master_key),
-                  binascii.hexlify(self.salt),)
+                  binascii.hexlify(self.salt), self.scrypt_N, self.scrypt_r, self.scrypt_p)
